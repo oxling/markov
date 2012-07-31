@@ -20,7 +20,7 @@ write_line({Forward_Data, Backward_Data}) ->
 % Output a line based on some input data.
 write_line({Forward_Data, Backward_Data}, Input) ->
 	% Find all the interesting keywords in the input
-	Keys = lists:filter(fun(S) -> (is_word(S)) and (is_interesting(S)) end, symbols(Input, [])),
+	Keys = lists:filter(fun(S) -> (is_word(S)) andalso (is_interesting(S)) end, symbols(Input, [])),
 
 	% Find all grams that have their first word matching a key
 	Grams = [Gram || {chain, Gram, _} <- Forward_Data],
@@ -64,6 +64,7 @@ is_interesting(Sym) when is_atom(Sym) ->
 		'IS' -> false;
 		'ARE' -> false;
 		'AND' -> false;
+		'TO' -> false;
 		_ -> true
 	end.
 
