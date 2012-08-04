@@ -22,9 +22,9 @@ write_line({Forward_Data, Backward_Data}, Input) ->
 	% Find all the interesting keywords in the input
 	Keys = lists:filter(fun(S) -> (is_word(S)) andalso (is_interesting(S)) end, symbols(Input, [])),
 
-	% Find all grams that have their first word matching a key
+	% Find all grams that have their middle word matching a key
 	Grams = [Gram || {chain, Gram, _} <- Forward_Data],
-	Key_Grams = [X || X <- lists:map(fun(X) -> lists:keyfind(X, 1, Grams) end, Keys),
+	Key_Grams = [X || X <- lists:map(fun(X) -> lists:keyfind(X, 2, Grams) end, Keys),
 												 X /= false],
 	
 	case Key_Grams of
@@ -38,7 +38,7 @@ write_line({Forward_Data, Backward_Data}, Input) ->
 	end.
 
 print_output(Output) ->
-	io:format("~s\n", [string:join(lists:map(fun(X) -> atom_to_list(X) end, Output), "")]).
+	[string:join(lists:map(fun(X) -> atom_to_list(X) end, Output), "")].
 
 is_alphanumeric(Char) ->
 	case string:chr("ABCDEFGHIJKLMNOPQRSTUVWXYZ" ++ 
@@ -65,6 +65,7 @@ is_interesting(Sym) when is_atom(Sym) ->
 		'ARE' -> false;
 		'AND' -> false;
 		'TO' -> false;
+		'LIKE' -> false;
 		_ -> true
 	end.
 
@@ -139,17 +140,19 @@ train_line(Line, Data) when length(Line) > 3 ->
 	case is_record(Chain, chain) of
 		false ->
 			% This is a new triple.
-			Next_Word = W4, %#word{sym=W4, probability = 1},
+			Next_Word = W4,
 			New_Chain = #chain{words={W1, W2, W3}, next=[Next_Word]};
 		true ->
 			% This triple already exists
 			New_Chain = #chain{words={W1, W2, W3}, next=[W4 | Chain#chain.next]}
 	end,
 	New_Data = lists:keystore({W1, W2, W3}, #chain.words, Data, New_Chain),
+
 	case W4 of
 		eof -> New_Data;
 		_ -> train_line([W2, W3, W4 | Rest], New_Data)
 	end;
+
 train_line(Line, Data) when length(Line) > 2 ->
 	train_line(Line ++ [eof], Data);
 train_line(_, Data) ->
