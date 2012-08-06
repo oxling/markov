@@ -34,7 +34,7 @@ connect(Server) when is_list(Server) ->
 	PID.
 
 listen(Socket) ->
-	listen(Socket, [], "").
+	listen(Socket, markov:parse_file("training_data.txt"), "").
 
 % Listens and responds to input from the IRC server.
 % Socket: Socket connected to IRC server
