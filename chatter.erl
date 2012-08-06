@@ -2,15 +2,15 @@
 -compile(export_all).
 -import(markov).
 
+% This bot learns from text that was entered (but not directed at the babblebot).
 
 % Using the chatterbot:
 % PID = chatter:connect("irc.someserver.net").
 % PID ! {join, "#channel"}.
 % PID ! {quit}.
 
-
 % The chatbot nickname that will appear in IRC.
--define(nick, "hs_lunchbot").
+-define(nick, "hs_babblebot").
 
 % Send a formatted message to the provided socket
 send(Socket, Format, Args) ->
@@ -34,7 +34,7 @@ connect(Server) when is_list(Server) ->
 	PID.
 
 listen(Socket) ->
-	listen(Socket, markov:parse_file("training_data.txt"), "").
+	listen(Socket, {[], []}, "").
 
 % Listens and responds to input from the IRC server.
 % Socket: Socket connected to IRC server
@@ -44,8 +44,7 @@ listen(Socket, State, Remainder) ->
 	receive
 		{tcp, Socket, Data} ->
 			{Array, Leftover} = split_str(Remainder ++ Data, []),
-			lists:foreach(fun(S) -> handle(Socket, parse(S), State) end, Array),
-			listen(Socket, State, Leftover);
+			listen(Socket, handle_lines(Socket, Array, State), Leftover);
 		{load, File} when is_list(File) ->
 			listen(Socket, markov:parse_file(File), Remainder);
 		{quit} ->
@@ -54,6 +53,11 @@ listen(Socket, State, Remainder) ->
 			send(Socket, "JOIN ~s\r\n", [Channel]),
 			listen(Socket, State, Remainder)
 	end.
+
+handle_lines(Socket, [Line | Rest], State) ->
+	handle_lines(Socket, Rest, handle(Socket, parse(Line), State));
+handle_lines(_Socket, [], State) ->
+	State.
 
 
 % Returns {Results, Remainder}
@@ -76,21 +80,27 @@ handle(Socket, {Source, Command, Args, Last_Arg}, State) ->
 	io:format("~s: ~p ~p ~p\n", [Source, Command, Args, Last_Arg]),
 	case {Source, Command, Args, Last_Arg} of 
 		{_, "PING", _, _} -> 
-			send(Socket, "PONG\r\n", []);
+			send(Socket, "PONG\r\n", []),
+			State;
 
 		% This is a general message in a channel.
 		{ _, "PRIVMSG", ["#" ++ Channel | _], Msg } ->
 			case directed_at_me(Msg) of
-				false -> ok;
-				true -> respond_to_message(Socket, "#" ++ Channel, Msg, State)
+				false ->
+					{Forward, Backward} = State,
+					Line = markov:symbols(Msg, []),
+					New_Forward = markov:train([Line], Forward, forward),
+					New_Backward = markov:train([Line], Backward, backward),
+					{New_Forward, New_Backward};
+				true -> respond_to_message(Socket, "#" ++ Channel, Msg, State), State
 			end;
 
 		% This is a private message.
 		{ User, "PRIVMSG", [?nick | _], Msg } ->
-			respond_to_message(Socket, short_user_name(User), Msg, State);
+			respond_to_message(Socket, short_user_name(User), Msg, State), State;
 
 		% Ignore everything else.
-		_ -> ok
+		_ -> State
 	end.
 
 % Respond to an IRC message directed at the chatbot.
@@ -99,7 +109,7 @@ handle(Socket, {Source, Command, Args, Last_Arg}, State) ->
 % State: Current chatbot state
 respond_to_message(Socket, Target, Message, State) ->
 	Output = markov:write_line(State, Message),
-	send(Socket, "PRIVMSG ~s :Today we'll be eating: ~s\r\n", [Target, Output]).
+	send(Socket, "PRIVMSG ~s :~s\r\n", [Target, Output]).
 
 % Checks whether nor not a message references the chatbot
 directed_at_me(Message) ->
