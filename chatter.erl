@@ -86,22 +86,27 @@ handle(Socket, {Source, Command, Args, Last_Arg}, State) ->
 		% This is a general message in a channel.
 		{ _, "PRIVMSG", ["#" ++ Channel | _], Msg } ->
 			case directed_at_me(Msg) of
-				false ->
-					{Forward, Backward} = State,
-					Line = markov:symbols(Msg, []),
-					New_Forward = markov:train([Line], Forward, forward),
-					New_Backward = markov:train([Line], Backward, backward),
-					{New_Forward, New_Backward};
+				false -> update_state(Msg, State);
 				true -> respond_to_message(Socket, "#" ++ Channel, Msg, State), State
 			end;
 
 		% This is a private message.
 		{ User, "PRIVMSG", [?nick | _], Msg } ->
-			respond_to_message(Socket, short_user_name(User), Msg, State), State;
+			New_State = update_state(Msg, State),
+			respond_to_message(Socket, short_user_name(User), Msg, New_State), New_State;
 
 		% Ignore everything else.
 		_ -> State
 	end.
+
+% Learns from a new line
+update_state(Line, State) ->
+	{Forward, Backward} = State,
+	Symbols = markov:symbols(Line, []),
+	New_Forward = markov:train([Symbols], Forward, forward),
+	New_Backward = markov:train([Symbols], Backward, backward),
+	{New_Forward, New_Backward}.
+
 
 % Respond to an IRC message directed at the chatbot.
 % Target: The target channel or user

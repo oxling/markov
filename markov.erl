@@ -12,6 +12,8 @@ parse_file(File_Name) when is_list(File_Name)->
 	{Forward_Data, Backward_Data}.
 
 % Output a line
+write_line({[], []}) ->
+	print_output([]);
 write_line({Forward_Data, Backward_Data}) ->
 	Forward = emit(forward, Forward_Data, []),
 	Output = emit(backward, Backward_Data, lists:reverse(Forward)),
